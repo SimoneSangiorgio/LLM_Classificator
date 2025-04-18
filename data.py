@@ -15,3 +15,10 @@ features = train_data[['text_features', 'type', 'category', 'subcategory']]
 
 labels = train_data["label"]
 
+
+types_list, categories_list, subcategories_list = types.unique(), categories.unique(), subcategories.unique()
+labels_list = labels.unique()
+
+exclusive_categories = train_data[(categories == categories) & (labels == "cultural exclusive")]
+representative_categories = train_data[(categories == categories) & (labels == "cultural representative")]
+agnostic_categories = train_data[(categories == categories) & (labels == "cultural agnostic")]

@@ -8,5 +8,5 @@ dataset_path = base_path / "dataset"
 
 train_path = dataset_path / "train_augmented.csv"
 
-validation_path = dataset_path / "valid.csv"
+validation_path = dataset_path / "valid_augmented.csv"
 

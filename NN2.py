@@ -44,10 +44,12 @@ def extract_features_from_csv(row):
     lang_count = int(row.get('num_languages', 0)) if not pd.isna(row.get('num_languages', 0)) else 0
     desc_len = int(row.get('description_length', 0)) if not pd.isna(row.get('description_length', 0)) else 0
     num_geo = int(row.get('num_geoproperties', 0)) if not pd.isna(row.get('num_geoproperties', 0)) else 0
+    num_cultural = int(row.get('num_cultural_properties', 0)) if not pd.isna(row.get('num_cultural_properties', 0)) else 0
 
     # Ensure category and subcategory are strings, handle potential NaNs
     category = str(row.get('category', "Unknown")) if not pd.isna(row.get('category')) else "Unknown"
     subcategory = str(row.get('subcategory', "Unknown")) if not pd.isna(row.get('subcategory')) else "Unknown"
+    type = str(row.get('type', "Unknown")) if not pd.isna(row.get('type')) else "Unknown"
     summary = "" if pd.isna(summary) else summary
     summary_lower = summary.lower()
     kw_ex = count_keywords(summary_lower, EXCLUSIVE_KEYWORDS)
@@ -59,7 +61,9 @@ def extract_features_from_csv(row):
         'num_geoproperties': num_geo, 'exclusive_keywords': kw_ex,
         'representative_keywords': kw_rp, 'agnostic_keywords': kw_ag,
         'category': category, # Add category
-        'subcategory': subcategory # Add subcategory
+        'subcategory': subcategory, # Add subcategory
+        'type': type,
+        'num_cultural_properties': num_cultural # Add num_cultural if needed
     }
 
 # --- Main Script ---
@@ -74,7 +78,7 @@ except Exception as e:
     print(f"Error reading training data CSV: {e}"); exit()
 
 # essential columns
-essential_cols = ['long_description', 'num_languages', 'description_length', 'num_geoproperties', 'category', 'subcategory', 'label']
+essential_cols = ['long_description', 'num_languages', 'description_length', 'num_geoproperties', 'num_cultural_properties', 'category', 'subcategory', 'type', 'label']
 
 missing_cols = [col for col in essential_cols if col not in df.columns]
 if missing_cols:
@@ -87,6 +91,7 @@ print(f"Proceeding with {len(df)} rows after removing potential missing labels."
 # Fill not a number in category/subcategory *before* extraction (alternative: handle in extract_features_from_csv)
 df['category'] = df['category'].fillna('Unknown')
 df['subcategory'] = df['subcategory'].fillna('Unknown')
+df['type'] = df['type'].fillna('Unknown')
 
 # 2. Feature Engineering (Numerical + Keywords + Categorical)
 print("Extracting features...")
@@ -95,9 +100,10 @@ features_list = [extract_features_from_csv(row) for index, row in tqdm(df.iterro
 features_df = pd.DataFrame(features_list, index=df.index)
 
 # Define numerical/keyword and categorical feature names
-numerical_keyword_features = ['description_length', 'num_languages', 'num_geoproperties',
-                              'exclusive_keywords', 'representative_keywords', 'agnostic_keywords']
-categorical_features = ['category', 'subcategory']
+numerical_keyword_features = ['description_length', 'num_languages', 'num_geoproperties', 'num_cultural_properties',
+                              'exclusive_keywords', 'representative_keywords', 'agnostic_keywords'
+                              ]
+categorical_features = ['category', 'subcategory', 'type']
 
 X_num_kw = features_df[numerical_keyword_features].values.astype(float)
 X_cat = features_df[categorical_features].values
@@ -120,12 +126,14 @@ print(f"Scaled numerical/keyword features shape: {X_num_kw_scaled.shape}")
 ohe = OneHotEncoder(handle_unknown='ignore', sparse_output=False)
 X_cat_encoded = ohe.fit_transform(X_cat)
 print(f"One-Hot Encoded categorical features shape: {X_cat_encoded.shape}")
-print(f"Number of categories found by OHE: {len(ohe.categories_[0])} (category), {len(ohe.categories_[1])} (subcategory)")
+print(f"Number of categories found by OHE: {len(ohe.categories_[0])} (category), {len(ohe.categories_[1])} (subcategory), {len(ohe.categories_[2])} (type),")
+      
 # Optional: print categories found
 # print("Categories found:", ohe.categories_)
 
 # Combine scaled numerical/keyword and one-hot encoded categorical features
 X_combined = np.hstack((X_num_kw_scaled, X_cat_encoded))
+#X_combined = np.hstack((X_num_kw, X_cat_encoded))
 print(f"Combined features shape: {X_combined.shape}")
 
 # Encode labels to integers (0, 1, 2...) -> Required for sparse_categorical_crossentropy
@@ -157,12 +165,15 @@ model = keras.Sequential(
     [
         # --- UPDATE Input shape ---
         keras.layers.Input(shape=(num_features,), name="Input_Layer"),
-        keras.layers.Dense(16, activation="relu", name="Hidden_Layer_1"),
+        keras.layers.Dense(64, activation="relu", name="Hidden_Layer_1"),
+        keras.layers.BatchNormalization(),
         keras.layers.Dropout(0.2),
         keras.layers.Dense(32, activation="relu", name="Hidden_Layer_2"),
-        keras.layers.Dropout(0.3),
-        keras.layers.Dense(64, activation="relu", name="Hidden_Layer_3"),
-        keras.layers.Dropout(0.4),
+        keras.layers.BatchNormalization(),
+        keras.layers.Dropout(0.2),
+        keras.layers.Dense(16, activation="relu", name="Hidden_Layer_3"),
+        keras.layers.BatchNormalization(),
+        keras.layers.Dropout(0.2),
         keras.layers.Dense(num_classes, activation="softmax", name="Output_Layer"),
     ],
     name="Classificatore_Wikidata_Integrated_Categorical" # Updated name
@@ -182,14 +193,14 @@ model.compile(
 reduce_lr = ReduceLROnPlateau(
     monitor='val_loss',
     factor=0.5,
-    patience=200,
+    patience=50,
     min_lr=1e-6,
     verbose=1
 )
 
 early_stopping = EarlyStopping(
     monitor='val_loss',
-    patience=200,
+    patience=50,
     restore_best_weights=True
 )
 

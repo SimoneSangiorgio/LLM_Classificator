@@ -14,6 +14,9 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder, OneHotEncoder
 from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
+import seaborn as sns
+
+
 
 # --- Keyword Lists ---
 EXCLUSIVE_KEYWORDS = [
@@ -163,7 +166,6 @@ print(f"Model input layer expecting {num_features} features.")
 
 model = keras.Sequential(
     [
-        # --- UPDATE Input shape ---
         keras.layers.Input(shape=(num_features,), name="Input_Layer"),
         keras.layers.Dense(64, activation="relu", name="Hidden_Layer_1"),
         keras.layers.BatchNormalization(),
@@ -176,7 +178,7 @@ model = keras.Sequential(
         keras.layers.Dropout(0.2),
         keras.layers.Dense(num_classes, activation="softmax", name="Output_Layer"),
     ],
-    name="Classificatore_Wikidata_Integrated_Categorical" # Updated name
+    name="Classificatore_Wikidata_Integrated_Categorical"
 )
 model.summary()
 
@@ -275,3 +277,14 @@ plot_history(history)
 model_path = "model.h5" # Updated path
 model.save(model_path)
 print(f"\nModel saved to: {model_path}")
+
+# --- Plot Confusion Matrix ---
+plt.figure(figsize=(10, 8))
+sns.heatmap(cm_df, annot=True, fmt="d", cmap="Blues", cbar=False)
+plt.title("Confusion Matrix")
+plt.ylabel("True Labels")
+plt.xlabel("Predicted Labels")
+plt.xticks(rotation=45, ha='right')
+plt.yticks(rotation=0)
+plt.tight_layout()
+plt.show()
